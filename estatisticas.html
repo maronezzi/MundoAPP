@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radio Monitor - Auto Refresh</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* --- TEMA DARK --- */
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --header-bg: #252526;
+            --text-primary: #e1e1e1;
+            --text-secondary: #a0a0a0;
+            --border-color: #333333;
+            --input-bg: #2d2d2d;
+            --accent: #00bcf2;
+            --accent-hover: #009ecb;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: var(--text-primary);
+        }
+
+        /* HEADER */
+        .header-container {
+            background: var(--header-bg);
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+
+        .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .header-actions { display: flex; gap: 15px; align-items: center; }
+
+        .status-badge {
+            font-size: 12px; padding: 5px 12px; border-radius: 12px; font-weight: bold;
+            background: #333; color: #aaa; border: 1px solid #444; display: flex; align-items: center; gap: 5px;
+        }
+        .status-online { background: #0b2a0b; color: #6ccb5f; border-color: #107c10; }
+
+        /* BOTÃO ATUALIZAR */
+        .btn-refresh-global {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            padding: 6px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        .btn-refresh-global:hover {
+            background: rgba(0, 188, 242, 0.15);
+        }
+        .btn-refresh-global:active {
+            transform: scale(0.98);
+        }
+        
+        /* Animação do ícone */
+        .spin { animation: rotation 1s infinite linear; }
+        @keyframes rotation { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        /* FILTROS */
+        .smart-filters {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .filter-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .filter-label {
+            font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; min-width: 60px;
+        }
+
+        .chip-group { display: flex; gap: 8px; flex-wrap: wrap; }
+        
+        .chip {
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 6px 14px;
+            border-radius: 16px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+        .chip:hover { background: #3d3d3d; border-color: #555; }
+        .chip.active {
+            background: rgba(0, 188, 242, 0.2);
+            border-color: var(--accent);
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .custom-inputs {
+            display: flex; align-items: center; gap: 10px;
+            background: #181818; padding: 5px 10px; border-radius: 4px; border: 1px solid #333;
+        }
+
+        input[type="date"], input[type="time"] {
+            background: transparent; border: none; color: var(--text-primary);
+            font-family: inherit; font-size: 13px; outline: none;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator,
+        input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.7); cursor: pointer; }
+
+        .btn-apply {
+            background: var(--accent); color: #fff; border: none; padding: 6px 12px;
+            border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px;
+        }
+        .btn-apply:hover { background: var(--accent-hover); }
+
+        /* GRID E CARDS */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            display: flex; flex-direction: column;
+        }
+
+        .kpi-card { border-left: 4px solid var(--accent); }
+        .kpi-value { font-size: 32px; font-weight: bold; margin: 10px 0; color: #fff; }
+        .kpi-label { font-size: 12px; color: var(--text-secondary); text-transform: uppercase; }
+
+        .chart-container { position: relative; height: 250px; width: 100%; flex-grow: 1; }
+        .col-span-2 { grid-column: span 2; }
+        .col-span-4 { grid-column: span 4; }
+
+        h3 { margin-top: 0; margin-bottom: 15px; color: var(--text-primary); font-size: 16px; font-weight: 500; }
+
+        /* TABELA */
+        .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .data-table th { text-align: left; padding: 12px; border-bottom: 2px solid var(--border-color); color: var(--text-secondary); background-color: #252526; }
+        .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-color); }
+        .data-table tr:hover { background-color: #2b2b2b; }
+
+        .tag { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; display: inline-block; }
+        .tag-prog { background: rgba(180, 0, 158, 0.2); color: #ff9ef4; border: 1px solid rgba(180, 0, 158, 0.4); }
+        .tag-announcer { background: rgba(0, 188, 242, 0.2); color: #82e3ff; border: 1px solid rgba(0, 188, 242, 0.4); }
+
+        @media (max-width: 1000px) {
+            .grid-container { grid-template-columns: 1fr; }
+            .col-span-2, .col-span-4 { grid-column: span 1; }
+            .filter-row { flex-direction: column; align-items: flex-start; }
+            .header-top { flex-direction: column; align-items: flex-start; gap: 15px; }
+            .header-actions { width: 100%; justify-content: space-between; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-container">
+        <div class="header-top">
+            <div>
+                <h1 style="margin:0; font-size: 24px; color: var(--accent);">Radio Analytics</h1>
+                <small style="color: var(--text-secondary);">Monitoramento em Tempo Real</small>
+            </div>
+            
+            <div class="header-actions">
+                <!-- BOTÃO DE ATUALIZAR -->
+                <button class="btn-refresh-global" onclick="fetchData()">
+                    <span id="refreshIcon" style="font-size: 16px;">↻</span> Atualizar Dados
+                </button>
+                
+                <div id="statusBadge" class="status-badge"><span>⟳</span> Conectando...</div>
+            </div>
+        </div>
+        
+        <div class="smart-filters">
+            <div class="filter-row">
+                <div class="filter-label">DATA:</div>
+                <div class="chip-group" id="dateChips">
+                    <div class="chip active" onclick="setPeriod('today', this)">Hoje</div>
+                    <div class="chip" onclick="setPeriod('yesterday', this)">Ontem</div>
+                    <div class="chip" onclick="setPeriod('week', this)">7 Dias</div>
+                    <div class="chip" onclick="setPeriod('month', this)">30 Dias</div>
+                </div>
+                <div class="custom-inputs">
+                    <input type="date" id="startDate" onchange="manualOverride('date')">
+                    <span style="color:#555">até</span>
+                    <input type="date" id="endDate" onchange="manualOverride('date')">
+                </div>
+            </div>
+
+            <div class="filter-row">
+                <div class="filter-label">HORÁRIO:</div>
+                <div class="chip-group" id="timeChips">
+                    <div class="chip active" onclick="setShift('all', this)">24h</div>
+                    <div class="chip" onclick="setShift('morning', this)">Manhã (06-12)</div>
+                    <div class="chip" onclick="setShift('afternoon', this)">Tarde (12-18)</div>
+                    <div class="chip" onclick="setShift('night', this)">Noite (18-00)</div>
+                    <div class="chip" onclick="setShift('dawn', this)">Madrugada (00-06)</div>
+                </div>
+                <div class="custom-inputs">
+                    <input type="time" id="startTime" value="00:00" onchange="manualOverride('time')">
+                    <span style="color:#555">às</span>
+                    <input type="time" id="endTime" value="23:59" onchange="manualOverride('time')">
+                </div>
+                <button class="btn-apply" onclick="filterAndRender()">Aplicar Filtro</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid-container">
+        <div class="card kpi-card">
+            <div class="kpi-label">Músicas (Seleção)</div>
+            <div class="kpi-value" id="kpiSongs">0</div>
+        </div>
+        <div class="card kpi-card" style="border-left-color: #b4009e;">
+            <div class="kpi-label">Programas na Grade</div>
+            <div class="kpi-value" id="kpiPrograms">0</div>
+        </div>
+        <div class="card kpi-card" style="border-left-color: #107c10;">
+            <div class="kpi-label">Locutores no Ar</div>
+            <div class="kpi-value" id="kpiAnnouncers">0</div>
+        </div>
+        <div class="card kpi-card" style="border-left-color: #d83b01;">
+            <div class="kpi-label">Tempo Comercial</div>
+            <div class="kpi-value" id="kpiTime">0 min</div>
+        </div>
+    </div>
+
+    <!-- 1. GRÁFICOS DE MÚSICA -->
+    <div class="grid-container">
+        <div class="card col-span-2">
+            <h3>Top Artistas</h3>
+            <div class="chart-container"><canvas id="chartArtists"></canvas></div>
+        </div>
+        <div class="card col-span-2">
+            <h3>Timeline de Execuções</h3>
+            <div class="chart-container"><canvas id="chartTimeline"></canvas></div>
+        </div>
+    </div>
+
+    <!-- 2. TABELA DE DADOS -->
+    <div class="grid-container">
+        <div class="card col-span-4">
+            <h3>Histórico de Execuções (Filtro Atual)</h3>
+            <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
+                <table class="data-table" id="tableHistory">
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Música / Artista</th>
+                            <th>Programa</th>
+                            <th>Locutor</th>
+                            <th style="width: 80px;">Pop.</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. GRÁFICOS DE PROGRAMAÇÃO -->
+    <div class="grid-container">
+        <div class="card col-span-2">
+            <h3>Distribuição por Programa</h3>
+            <div class="chart-container"><canvas id="chartPrograms"></canvas></div>
+        </div>
+        <div class="card col-span-2">
+            <h3>Top Locutores (Announcers)</h3>
+            <div class="chart-container"><canvas id="chartAnnouncers"></canvas></div>
+        </div>
+    </div>
+
+<script>
+    Chart.defaults.color = '#a0a0a0';
+    Chart.defaults.borderColor = '#333';
+    const API_URL = 'http://167.126.18.152:8000';
+    const FETCH_LIMIT = 2000;
+
+    let rawData = { music: [], intervals: [] };
+    let filteredData = { music: [], intervals: [] };
+    let chartInstances = {};
+
+    window.onload = function() {
+        updateDateInputs('today');
+        fetchData();
+    };
+
+    async function fetchData() {
+        const badge = document.getElementById('statusBadge');
+        const icon = document.getElementById('refreshIcon');
+        
+        // UI Loading State
+        badge.innerHTML = "<span>⟳</span> Baixando...";
+        badge.className = "status-badge";
+        icon.classList.add('spin'); // Inicia animação
+
+        try {
+            const [resMusic, resInter] = await Promise.all([
+                fetch(`${API_URL}/history?limit=${FETCH_LIMIT}`),
+                fetch(`${API_URL}/intervals?limit=${FETCH_LIMIT}`)
+            ]);
+
+            const musicJson = await resMusic.json();
+            const interJson = await resInter.json();
+
+            // Parser de Data: UTC -> Local
+            const parseDate = (d) => new Date(d.replace(' ', 'T') + (d.endsWith('Z')?'':'Z'));
+
+            rawData.music = musicJson.map(m => ({
+                ...m,
+                dateObj: parseDate(m.played_at),
+                program: m.program || "Não Identificado",
+                announcer: m.announcer || "Auto DJ"
+            }));
+
+            rawData.intervals = interJson.map(i => ({
+                ...i,
+                dateObj: parseDate(i.start_time)
+            }));
+
+            // UI Success State
+            badge.innerHTML = "<span>✓</span> Online";
+            badge.className = "status-badge status-online";
+
+            filterAndRender();
+
+        } catch (e) {
+            console.error(e);
+            badge.innerHTML = "<span>⚠</span> Erro";
+            badge.style.color = "#ff5e5e";
+        } finally {
+            // Remove animação mesmo se der erro
+            setTimeout(() => icon.classList.remove('spin'), 500);
+        }
+    }
+
+    function setPeriod(type, el) {
+        document.querySelectorAll('#dateChips .chip').forEach(c => c.classList.remove('active'));
+        if(el) el.classList.add('active');
+        updateDateInputs(type);
+        filterAndRender();
+    }
+
+    function formatLocalDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function updateDateInputs(type) {
+        const end = new Date();
+        const start = new Date();
+
+        if (type === 'yesterday') {
+            start.setDate(end.getDate() - 1);
+            end.setDate(end.getDate() - 1);
+        } else if (type === 'week') {
+            start.setDate(end.getDate() - 7);
+        } else if (type === 'month') {
+            start.setDate(end.getDate() - 30);
+        }
+
+        document.getElementById('startDate').value = formatLocalDate(start);
+        document.getElementById('endDate').value = formatLocalDate(end);
+    }
+
+    function setShift(type, el) {
+        document.querySelectorAll('#timeChips .chip').forEach(c => c.classList.remove('active'));
+        if(el) el.classList.add('active');
+        let s = '00:00', e = '23:59';
+        if (type === 'morning') { s='06:00'; e='12:00'; }
+        if (type === 'afternoon') { s='12:00'; e='18:00'; }
+        if (type === 'night') { s='18:00'; e='00:00'; }
+        if (type === 'dawn') { s='00:00'; e='06:00'; }
+        document.getElementById('startTime').value = s;
+        document.getElementById('endTime').value = e;
+        filterAndRender();
+    }
+
+    function manualOverride(group) {
+        if(group === 'date') document.querySelectorAll('#dateChips .chip').forEach(c => c.classList.remove('active'));
+        if(group === 'time') document.querySelectorAll('#timeChips .chip').forEach(c => c.classList.remove('active'));
+    }
+
+    function filterAndRender() {
+        const sDateVal = document.getElementById('startDate').value;
+        const eDateVal = document.getElementById('endDate').value;
+        const sTimeVal = document.getElementById('startTime').value;
+        const eTimeVal = document.getElementById('endTime').value;
+
+        const startD = new Date(sDateVal + 'T00:00:00');
+        const endD = new Date(eDateVal + 'T23:59:59');
+
+        const getMins = (t) => { const [h,m]=t.split(':').map(Number); return h*60+m; };
+        const sMins = getMins(sTimeVal);
+        const eMins = getMins(eTimeVal);
+        const isOvernight = sMins > eMins;
+
+        const filterFn = (item) => {
+            const d = item.dateObj;
+            if (d < startD || d > endD) return false;
+            const itemMins = d.getHours() * 60 + d.getMinutes();
+            if (isOvernight) return (itemMins >= sMins || itemMins <= eMins);
+            return (itemMins >= sMins && itemMins <= eMins);
+        };
+
+        filteredData.music = rawData.music.filter(filterFn);
+        filteredData.intervals = rawData.intervals.filter(filterFn);
+
+        updateUI();
+    }
+
+    function updateUI() {
+        const data = filteredData.music;
+
+        document.getElementById('kpiSongs').innerText = data.length;
+        document.getElementById('kpiPrograms').innerText = new Set(data.map(m=>m.program)).size;
+        document.getElementById('kpiAnnouncers').innerText = new Set(data.map(m=>m.announcer)).size;
+        const sec = filteredData.intervals.reduce((a,b)=>a+b.duration_seconds,0);
+        document.getElementById('kpiTime').innerText = (sec/60).toFixed(0) + " min";
+
+        renderTable(data);
+        renderCharts(data);
+    }
+
+    function renderTable(data) {
+        const tbody = document.querySelector('#tableHistory tbody');
+        tbody.innerHTML = '';
+        if(!data.length) { tbody.innerHTML='<tr><td colspan="5" align="center">Vazio</td></tr>'; return;}
+
+        data.slice(0, 100).forEach(m => {
+            const time = m.dateObj.toLocaleString('pt-BR');
+            const popColor = m.popularity > 70 ? '#00bcf2' : '#666';
+            tbody.innerHTML += `
+                <tr>
+                    <td style="color:#888; font-size:11px;">${time}</td>
+                    <td><strong style="color:#eee;">${m.title}</strong><br><small style="color:#aaa;">${m.artist}</small></td>
+                    <td><span class="tag tag-prog">${m.program}</span></td>
+                    <td><span class="tag tag-announcer">${m.announcer}</span></td>
+                    <td style="color:${popColor}; font-weight:bold;">${m.popularity}</td>
+                </tr>
+            `;
+        });
+    }
+
+    function renderCharts(data) {
+        const count = (arr, k) => {
+            const c={}; arr.forEach(x=>c[x[k]]=(c[x[k]]||0)+1);
+            return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,8);
+        };
+
+        const progs = count(data, 'program');
+        const announ = count(data, 'announcer');
+        const arts = count(data, 'artist');
+
+        const timeline = {};
+        const sDate = document.getElementById('startDate').value;
+        const eDate = document.getElementById('endDate').value;
+        const groupedByHour = sDate === eDate;
+
+        data.forEach(m => {
+            let k = groupedByHour ? 
+                m.dateObj.getHours().toString().padStart(2,'0') + 'h' : 
+                m.dateObj.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
+            timeline[k] = (timeline[k]||0)+1;
+        });
+
+        const tKeys = Object.keys(timeline);
+        if(groupedByHour) tKeys.sort(); else tKeys.reverse();
+
+        createChart('chartPrograms', 'doughnut', {
+            labels: progs.map(x=>x[0]),
+            datasets: [{ data: progs.map(x=>x[1]), backgroundColor: ['#b4009e','#d100be','#e800cc','#555'], borderWidth:0 }]
+        });
+
+        createChart('chartAnnouncers', 'bar', {
+            labels: announ.map(x=>x[0]),
+            datasets: [{ label:'Inserções', data: announ.map(x=>x[1]), backgroundColor: 'rgba(0,188,242,0.7)', borderColor:'#00bcf2', borderWidth:1 }]
+        }, { indexAxis: 'y' });
+
+        createChart('chartArtists', 'bar', {
+            labels: arts.map(x=>x[0]),
+            datasets: [{ label:'Plays', data: arts.map(x=>x[1]), backgroundColor: '#333', borderColor:'#555', borderWidth:1 }]
+        });
+
+        createChart('chartTimeline', 'line', {
+            labels: tKeys,
+            datasets: [{ label:'Volume', data: tKeys.map(k=>timeline[k]), borderColor:'#107c10', backgroundColor:'rgba(16,124,16,0.2)', fill:true, tension:0.3 }]
+        });
+    }
+
+    function createChart(id, type, data, opts={}) {
+        if(chartInstances[id]) chartInstances[id].destroy();
+        chartInstances[id] = new Chart(document.getElementById(id), {
+            type: type, data: data,
+            options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:type==='doughnut'}}, ...opts }
+        });
+    }
+</script>
+</body>
+</html>
