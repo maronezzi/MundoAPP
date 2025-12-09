@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Radio Monitor - Analytics (Média Ponderada)</title>
+    <title>Radio Monitor - Analytics Completo</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* --- TEMA DARK --- */
@@ -15,11 +15,11 @@
             --text-secondary: #a0a0a0;
             --border-color: #333333;
             --input-bg: #2d2d2d;
-            --accent: #00bcf2;       /* Azul */
+            --accent: #00bcf2;       
             --accent-hover: #009ecb;
-            --warn: #ffb900;          /* Amarelo (Popularidade) */
-            --success: #107c10;       /* Verde (Volume) */
-            --purple: #b4009e;        /* Roxo (Programas) */
+            --warn: #ffb900;          
+            --success: #107c10;       
+            --purple: #b4009e;        
         }
 
         body {
@@ -63,12 +63,8 @@
             gap: 6px;
             transition: all 0.2s;
         }
-        .btn-refresh-global:hover {
-            background: rgba(0, 188, 242, 0.15);
-        }
-        .btn-refresh-global:active {
-            transform: scale(0.98);
-        }
+        .btn-refresh-global:hover { background: rgba(0, 188, 242, 0.15); }
+        .btn-refresh-global:active { transform: scale(0.98); }
         
         .spin { animation: rotation 1s infinite linear; }
         @keyframes rotation { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -82,17 +78,8 @@
             border-top: 1px solid var(--border-color);
         }
 
-        .filter-row {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-
-        .filter-label {
-            font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; min-width: 60px;
-        }
-
+        .filter-row { display: flex; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .filter-label { font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; min-width: 60px; }
         .chip-group { display: flex; gap: 8px; flex-wrap: wrap; }
         
         .chip {
@@ -159,9 +146,38 @@
 
         h3 { margin-top: 0; margin-bottom: 15px; color: var(--text-primary); font-size: 16px; font-weight: 500; }
 
-        /* TABELA */
+        /* TABELA E FILTROS EXCEL */
         .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .data-table th { text-align: left; padding: 12px; border-bottom: 2px solid var(--border-color); color: var(--text-secondary); background-color: #252526; }
+        
+        .data-table th { 
+            text-align: left; 
+            padding: 10px 12px; 
+            border-bottom: 1px solid var(--border-color); 
+            color: var(--text-secondary); 
+            background-color: #252526; 
+            font-weight: 600;
+        }
+
+        /* Estilo dos Cabeçalhos Ordenáveis */
+        .sortable { cursor: pointer; user-select: none; }
+        .sortable:hover { color: var(--accent); }
+        .sort-icon { font-size: 10px; margin-left: 5px; opacity: 0.5; }
+
+        /* Linha de Filtros (Inputs) */
+        .filter-row-tr th { padding: 5px 12px; background-color: #202021; border-bottom: 2px solid var(--border-color); }
+        
+        .table-filter-input, .table-filter-select {
+            width: 100%;
+            background: var(--input-bg);
+            border: 1px solid #333;
+            color: #eee;
+            font-size: 12px;
+            padding: 4px 6px;
+            border-radius: 3px;
+            outline: none;
+        }
+        .table-filter-input:focus, .table-filter-select:focus { border-color: var(--accent); }
+
         .data-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-color); }
         .data-table tr:hover { background-color: #2b2b2b; }
 
@@ -286,23 +302,34 @@
         </div>
     </div>
 
-    <!-- 4. TABELA DE DADOS -->
+    <!-- 4. TABELA DE DADOS COM FILTROS EXCEL -->
     <div class="grid-container">
         <div class="card col-span-4">
-            <h3>Histórico de Execuções (Filtro Atual)</h3>
-            <div style="overflow-x: auto; max-height: 400px; overflow-y: auto;">
+            <h3>Histórico de Execuções</h3>
+            <div style="overflow-x: auto; max-height: 500px; overflow-y: auto;">
                 <table class="data-table" id="tableHistory">
                     <thead>
+                        <!-- Linha de Cabeçalho (Ordenação) -->
                         <tr>
-                            <th>Data/Hora</th>
-                            <th>Música / Artista</th>
-                            <th>Programa</th>
-                            <th>Locutor</th>
-                            <th style="width: 80px;">Pop.</th>
+                            <th class="sortable" onclick="sortTable('dateObj')">Data/Hora <span class="sort-icon">↕</span></th>
+                            <!-- ALTERAÇÃO AQUI: sortTable('artist') ao invés de 'title' -->
+                            <th class="sortable" onclick="sortTable('artist')">Música / Artista <span class="sort-icon">↕</span></th>
+                            <th class="sortable" onclick="sortTable('program')">Programa <span class="sort-icon">↕</span></th>
+                            <th class="sortable" onclick="sortTable('announcer')">Locutor <span class="sort-icon">↕</span></th>
+                            <th class="sortable" onclick="sortTable('popularity')" style="width: 80px;">Pop. <span class="sort-icon">↕</span></th>
+                        </tr>
+                        <!-- Linha de Filtros (Inputs/Selects) -->
+                        <tr class="filter-row-tr">
+                            <th><input type="text" class="table-filter-input" placeholder="Buscar Data..." id="f_date" onkeyup="applyLocalFilters()"></th>
+                            <th><input type="text" class="table-filter-input" placeholder="Buscar Artista/Música..." id="f_music" onkeyup="applyLocalFilters()"></th>
+                            <th><select class="table-filter-select" id="f_program" onchange="applyLocalFilters()"><option value="">Todos</option></select></th>
+                            <th><select class="table-filter-select" id="f_announcer" onchange="applyLocalFilters()"><option value="">Todos</option></select></th>
+                            <th><input type="number" class="table-filter-input" placeholder="> X" id="f_pop" onkeyup="applyLocalFilters()"></th>
                         </tr>
                     </thead>
                     <tbody></tbody>
                 </table>
+                <div id="tableCount" style="padding:10px; font-size:11px; color:#666; text-align:right;"></div>
             </div>
         </div>
     </div>
@@ -315,8 +342,12 @@
     const FETCH_LIMIT = 2000;
 
     let rawData = { music: [], intervals: [] };
-    let filteredData = { music: [], intervals: [] };
+    let filteredData = { music: [], intervals: [] }; 
+    let displayedTableData = []; 
     let chartInstances = {};
+
+    // Estado da Tabela
+    let sortState = { col: 'dateObj', asc: false };
 
     window.onload = function() {
         updateDateInputs('today');
@@ -347,8 +378,9 @@
                 dateObj: parseDate(m.played_at),
                 program: m.program || "Não Identificado",
                 announcer: m.announcer || "Auto DJ",
-                // Garante que é número para o cálculo de média
-                popularity: Number(m.popularity) || 0 
+                popularity: Number(m.popularity) || 0,
+                // Campo auxiliar para busca de texto
+                searchStr: (m.title + ' ' + m.artist).toLowerCase()
             }));
 
             rawData.intervals = interJson.map(i => ({
@@ -444,6 +476,7 @@
         filteredData.music = rawData.music.filter(filterFn);
         filteredData.intervals = rawData.intervals.filter(filterFn);
 
+        populateTableFilters(filteredData.music);
         updateUI();
     }
 
@@ -456,16 +489,95 @@
         const sec = filteredData.intervals.reduce((a,b)=>a+b.duration_seconds,0);
         document.getElementById('kpiTime').innerText = (sec/60).toFixed(0) + " min";
 
-        renderTable(data);
         renderCharts(data);
+        applyLocalFilters();
+    }
+
+    // --- LÓGICA DE TABELA ESTILO EXCEL ---
+
+    function populateTableFilters(data) {
+        const uniqueProgs = [...new Set(data.map(d => d.program))].sort();
+        const uniqueAnns = [...new Set(data.map(d => d.announcer))].sort();
+
+        const currProg = document.getElementById('f_program').value;
+        const currAnn = document.getElementById('f_announcer').value;
+
+        const fill = (id, list, selected) => {
+            const el = document.getElementById(id);
+            el.innerHTML = '<option value="">Todos</option>' + list.map(i => `<option value="${i}" ${i===selected?'selected':''}>${i}</option>`).join('');
+        };
+
+        fill('f_program', uniqueProgs, currProg);
+        fill('f_announcer', uniqueAnns, currAnn);
+    }
+
+    function applyLocalFilters() {
+        const fDate = document.getElementById('f_date').value.toLowerCase();
+        const fMusic = document.getElementById('f_music').value.toLowerCase();
+        const fProg = document.getElementById('f_program').value;
+        const fAnn = document.getElementById('f_announcer').value;
+        const fPop = document.getElementById('f_pop').value;
+
+        // Filtra
+        displayedTableData = filteredData.music.filter(row => {
+            if (fDate && !row.dateObj.toLocaleString('pt-BR').toLowerCase().includes(fDate)) return false;
+            if (fMusic && !row.searchStr.includes(fMusic)) return false;
+            if (fProg && row.program !== fProg) return false;
+            if (fAnn && row.announcer !== fAnn) return false;
+            if (fPop && row.popularity <= Number(fPop)) return false;
+            return true;
+        });
+
+        // Ordena (Com ajuste para Artista)
+        displayedTableData.sort((a, b) => {
+            const col = sortState.col;
+            let valA = a[col];
+            let valB = b[col];
+
+            if (typeof valA === 'string') valA = valA.toLowerCase();
+            if (typeof valB === 'string') valB = valB.toLowerCase();
+
+            // Lógica de Comparação Principal
+            if (valA < valB) return sortState.asc ? -1 : 1;
+            if (valA > valB) return sortState.asc ? 1 : -1;
+            
+            // DESEMPATE: Se estivermos ordenando por artista e os nomes forem iguais,
+            // ordena pelo nome da música (para ficar organizado)
+            if (col === 'artist') {
+                 let titleA = a.title.toLowerCase();
+                 let titleB = b.title.toLowerCase();
+                 if (titleA < titleB) return sortState.asc ? -1 : 1;
+                 if (titleA > titleB) return sortState.asc ? 1 : -1;
+            }
+
+            return 0;
+        });
+
+        renderTable(displayedTableData);
+    }
+
+    function sortTable(column) {
+        if (sortState.col === column) {
+            sortState.asc = !sortState.asc;
+        } else {
+            sortState.col = column;
+            sortState.asc = true;
+        }
+        applyLocalFilters();
     }
 
     function renderTable(data) {
         const tbody = document.querySelector('#tableHistory tbody');
+        const counter = document.getElementById('tableCount');
+        
         tbody.innerHTML = '';
-        if(!data.length) { tbody.innerHTML='<tr><td colspan="5" align="center">Vazio</td></tr>'; return;}
+        counter.innerText = `Exibindo ${data.length} registros`;
 
-        data.slice(0, 100).forEach(m => {
+        if(!data.length) { tbody.innerHTML='<tr><td colspan="5" align="center" style="padding:20px;">Nenhum resultado encontrado</td></tr>'; return;}
+
+        const viewData = data.slice(0, 200); 
+
+        viewData.forEach(m => {
             const time = m.dateObj.toLocaleString('pt-BR');
             const pop = m.popularity;
             const popColor = pop > 70 ? '#00bcf2' : (pop === 0 ? '#444' : '#666');
@@ -480,23 +592,23 @@
                 </tr>
             `;
         });
+        
+        if (data.length > 200) {
+            tbody.innerHTML += `<tr><td colspan="5" align="center" style="color:#666; font-style:italic;">...e mais ${data.length - 200} registros (use os filtros para refinar)</td></tr>`;
+        }
     }
 
-    // --- LÓGICA CENTRAL DE CÁLCULO E GRÁFICOS ---
+    // --- GRÁFICOS ---
     function renderCharts(data) {
-        
-        // 1. Helper Simples para Volume
         const count = (arr, k) => {
             const c={}; arr.forEach(x=>c[x[k]]=(c[x[k]]||0)+1);
             return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,8);
         };
 
-        // 2. Helper de Média Ponderada (USADO PARA OS RANKINGS)
-        // Só soma e conta se popularity > 0
         const averagePopularity = (arr, keyFn) => {
             const stats = {}; 
             arr.forEach(x => {
-                if (x.popularity > 0) { // <--- FILTRO PRINCIPAL
+                if (x.popularity > 0) {
                     const k = keyFn(x);
                     if (!stats[k]) stats[k] = { sum: 0, validCount: 0 };
                     stats[k].sum += x.popularity;
@@ -509,13 +621,10 @@
             });
         };
 
-        // --- PREPARAÇÃO DE DADOS ---
-
         const progs = count(data, 'program');
         const announ = count(data, 'announcer');
         const arts = count(data, 'artist');
 
-        // 3. Processamento da TIMELINE (Volume Total vs Média Filtrada)
         const timelineStats = {}; 
         const sDate = document.getElementById('startDate').value;
         const eDate = document.getElementById('endDate').value;
@@ -528,11 +637,8 @@
             
             if(!timelineStats[k]) timelineStats[k] = { totalVolume: 0, sumPop: 0, countPop: 0 };
             
-            // Eixo ESQ (Volume): Conta tudo (Até vinheta de 0 pop)
             timelineStats[k].totalVolume++;
-
-            // Eixo DIR (Qualidade): Só soma se tiver popularidade
-            if (m.popularity > 0) { // <--- FILTRO DA TIMELINE
+            if (m.popularity > 0) {
                 timelineStats[k].sumPop += m.popularity;
                 timelineStats[k].countPop++;
             }
@@ -542,27 +648,20 @@
         if(groupedByHour) tKeys.sort(); else tKeys.reverse();
 
         const tCounts = tKeys.map(k => timelineStats[k].totalVolume);
-        
-        // Cálculo da Média da Timeline
         const tAvgs = tKeys.map(k => {
             const s = timelineStats[k];
-            // Se countPop > 0, faz a divisão. Se não, é 0 (mas só se não teve música válida)
             return s.countPop > 0 ? Math.round(s.sumPop / s.countPop) : 0;
         });
 
-        // 4. Rankings de Popularidade (Usando o Helper Filtrado)
-        
-        // A. Ranking por Hora (Popularidade Média)
+        // Rankings
         const popByHour = averagePopularity(data, m => m.dateObj.getHours().toString().padStart(2,'0') + 'h');
         popByHour.sort((a,b) => b[1] - a[1]); 
 
-        // B. Ranking por Programa (Popularidade Média)
         const popByProg = averagePopularity(data, m => m.program);
         popByProg.sort((a,b) => b[1] - a[1]);
         const topPopProg = popByProg.slice(0, 10); 
 
-        // --- RENDERIZAÇÃO ---
-
+        // Gráficos
         createChart('chartPrograms', 'doughnut', {
             labels: progs.map(x=>x[0]),
             datasets: [{ data: progs.map(x=>x[1]), backgroundColor: ['#b4009e','#d100be','#e800cc','#555'], borderWidth:0 }]
@@ -578,7 +677,6 @@
             datasets: [{ label:'Plays', data: arts.map(x=>x[1]), backgroundColor: '#333', borderColor:'#555', borderWidth:1 }]
         });
 
-        // Timeline Dual Axis
         createChart('chartTimeline', 'bar', {
             labels: tKeys,
             datasets: [
@@ -594,7 +692,7 @@
                 },
                 {
                     type: 'line',
-                    label: 'Pop. Média (Válida)', // Indica visualmente que é filtrado
+                    label: 'Pop. Média (Válida)',
                     data: tAvgs,
                     borderColor: '#ffb900',
                     borderWidth: 2,
@@ -611,7 +709,6 @@
             }
         });
 
-        // Chart Ranking: Pop Média por Hora (Lógica aplicada aqui também)
         createChart('chartPopHour', 'bar', {
             labels: popByHour.map(x=>x[0]),
             datasets: [{
@@ -623,7 +720,6 @@
             }]
         }, { scales: { y: { beginAtZero: true, max: 100 } } });
 
-        // Chart Ranking: Pop Média por Programa
         createChart('chartPopProgram', 'bar', {
             labels: topPopProg.map(x=>x[0]),
             datasets: [{
