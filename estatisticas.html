@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Radio Monitor - Auto Refresh</title>
+    <title>Radio Monitor - Analytics (Média Ponderada)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* --- TEMA DARK --- */
@@ -15,8 +15,11 @@
             --text-secondary: #a0a0a0;
             --border-color: #333333;
             --input-bg: #2d2d2d;
-            --accent: #00bcf2;
+            --accent: #00bcf2;       /* Azul */
             --accent-hover: #009ecb;
+            --warn: #ffb900;          /* Amarelo (Popularidade) */
+            --success: #107c10;       /* Verde (Volume) */
+            --purple: #b4009e;        /* Roxo (Programas) */
         }
 
         body {
@@ -67,7 +70,6 @@
             transform: scale(0.98);
         }
         
-        /* Animação do ícone */
         .spin { animation: rotation 1s infinite linear; }
         @keyframes rotation { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
@@ -186,11 +188,9 @@
             </div>
             
             <div class="header-actions">
-                <!-- BOTÃO DE ATUALIZAR -->
                 <button class="btn-refresh-global" onclick="fetchData()">
                     <span id="refreshIcon" style="font-size: 16px;">↻</span> Atualizar Dados
                 </button>
-                
                 <div id="statusBadge" class="status-badge"><span>⟳</span> Conectando...</div>
             </div>
         </div>
@@ -236,11 +236,11 @@
             <div class="kpi-label">Músicas (Seleção)</div>
             <div class="kpi-value" id="kpiSongs">0</div>
         </div>
-        <div class="card kpi-card" style="border-left-color: #b4009e;">
+        <div class="card kpi-card" style="border-left-color: var(--purple);">
             <div class="kpi-label">Programas na Grade</div>
             <div class="kpi-value" id="kpiPrograms">0</div>
         </div>
-        <div class="card kpi-card" style="border-left-color: #107c10;">
+        <div class="card kpi-card" style="border-left-color: var(--success);">
             <div class="kpi-label">Locutores no Ar</div>
             <div class="kpi-value" id="kpiAnnouncers">0</div>
         </div>
@@ -250,19 +250,43 @@
         </div>
     </div>
 
-    <!-- 1. GRÁFICOS DE MÚSICA -->
+    <!-- 1. GRÁFICOS DE MÚSICA & TIMELINE -->
     <div class="grid-container">
         <div class="card col-span-2">
-            <h3>Top Artistas</h3>
+            <h3>Top Artistas (Execuções)</h3>
             <div class="chart-container"><canvas id="chartArtists"></canvas></div>
         </div>
         <div class="card col-span-2">
-            <h3>Timeline de Execuções</h3>
+            <h3>Timeline: Volume (Esq) vs Pop. Média (Dir)</h3>
             <div class="chart-container"><canvas id="chartTimeline"></canvas></div>
         </div>
     </div>
 
-    <!-- 2. TABELA DE DADOS -->
+    <!-- 2. ANÁLISE DE POPULARIDADE (MÉDIA VÁLIDA > 0) -->
+    <div class="grid-container">
+        <div class="card col-span-2">
+            <h3>Ranking: Popularidade Média por Hora</h3>
+            <div class="chart-container"><canvas id="chartPopHour"></canvas></div>
+        </div>
+        <div class="card col-span-2">
+            <h3>Ranking: Popularidade Média por Programa</h3>
+            <div class="chart-container"><canvas id="chartPopProgram"></canvas></div>
+        </div>
+    </div>
+
+    <!-- 3. GRÁFICOS DE PROGRAMAÇÃO (VOLUME) -->
+    <div class="grid-container">
+        <div class="card col-span-2">
+            <h3>Volume por Programa (Share)</h3>
+            <div class="chart-container"><canvas id="chartPrograms"></canvas></div>
+        </div>
+        <div class="card col-span-2">
+            <h3>Top Locutores (Announcers)</h3>
+            <div class="chart-container"><canvas id="chartAnnouncers"></canvas></div>
+        </div>
+    </div>
+
+    <!-- 4. TABELA DE DADOS -->
     <div class="grid-container">
         <div class="card col-span-4">
             <h3>Histórico de Execuções (Filtro Atual)</h3>
@@ -283,21 +307,10 @@
         </div>
     </div>
 
-    <!-- 3. GRÁFICOS DE PROGRAMAÇÃO -->
-    <div class="grid-container">
-        <div class="card col-span-2">
-            <h3>Distribuição por Programa</h3>
-            <div class="chart-container"><canvas id="chartPrograms"></canvas></div>
-        </div>
-        <div class="card col-span-2">
-            <h3>Top Locutores (Announcers)</h3>
-            <div class="chart-container"><canvas id="chartAnnouncers"></canvas></div>
-        </div>
-    </div>
-
 <script>
     Chart.defaults.color = '#a0a0a0';
     Chart.defaults.borderColor = '#333';
+    
     const API_URL = 'http://167.126.18.152:8000';
     const FETCH_LIMIT = 2000;
 
@@ -314,10 +327,9 @@
         const badge = document.getElementById('statusBadge');
         const icon = document.getElementById('refreshIcon');
         
-        // UI Loading State
         badge.innerHTML = "<span>⟳</span> Baixando...";
         badge.className = "status-badge";
-        icon.classList.add('spin'); // Inicia animação
+        icon.classList.add('spin');
 
         try {
             const [resMusic, resInter] = await Promise.all([
@@ -328,14 +340,15 @@
             const musicJson = await resMusic.json();
             const interJson = await resInter.json();
 
-            // Parser de Data: UTC -> Local
             const parseDate = (d) => new Date(d.replace(' ', 'T') + (d.endsWith('Z')?'':'Z'));
 
             rawData.music = musicJson.map(m => ({
                 ...m,
                 dateObj: parseDate(m.played_at),
                 program: m.program || "Não Identificado",
-                announcer: m.announcer || "Auto DJ"
+                announcer: m.announcer || "Auto DJ",
+                // Garante que é número para o cálculo de média
+                popularity: Number(m.popularity) || 0 
             }));
 
             rawData.intervals = interJson.map(i => ({
@@ -343,7 +356,6 @@
                 dateObj: parseDate(i.start_time)
             }));
 
-            // UI Success State
             badge.innerHTML = "<span>✓</span> Online";
             badge.className = "status-badge status-online";
 
@@ -354,7 +366,6 @@
             badge.innerHTML = "<span>⚠</span> Erro";
             badge.style.color = "#ff5e5e";
         } finally {
-            // Remove animação mesmo se der erro
             setTimeout(() => icon.classList.remove('spin'), 500);
         }
     }
@@ -456,30 +467,56 @@
 
         data.slice(0, 100).forEach(m => {
             const time = m.dateObj.toLocaleString('pt-BR');
-            const popColor = m.popularity > 70 ? '#00bcf2' : '#666';
+            const pop = m.popularity;
+            const popColor = pop > 70 ? '#00bcf2' : (pop === 0 ? '#444' : '#666');
+            
             tbody.innerHTML += `
                 <tr>
                     <td style="color:#888; font-size:11px;">${time}</td>
                     <td><strong style="color:#eee;">${m.title}</strong><br><small style="color:#aaa;">${m.artist}</small></td>
                     <td><span class="tag tag-prog">${m.program}</span></td>
                     <td><span class="tag tag-announcer">${m.announcer}</span></td>
-                    <td style="color:${popColor}; font-weight:bold;">${m.popularity}</td>
+                    <td style="color:${popColor}; font-weight:bold;">${pop}</td>
                 </tr>
             `;
         });
     }
 
+    // --- LÓGICA CENTRAL DE CÁLCULO E GRÁFICOS ---
     function renderCharts(data) {
+        
+        // 1. Helper Simples para Volume
         const count = (arr, k) => {
             const c={}; arr.forEach(x=>c[x[k]]=(c[x[k]]||0)+1);
             return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,8);
         };
 
+        // 2. Helper de Média Ponderada (USADO PARA OS RANKINGS)
+        // Só soma e conta se popularity > 0
+        const averagePopularity = (arr, keyFn) => {
+            const stats = {}; 
+            arr.forEach(x => {
+                if (x.popularity > 0) { // <--- FILTRO PRINCIPAL
+                    const k = keyFn(x);
+                    if (!stats[k]) stats[k] = { sum: 0, validCount: 0 };
+                    stats[k].sum += x.popularity;
+                    stats[k].validCount++;
+                }
+            });
+            return Object.entries(stats).map(([k, v]) => {
+                const avg = v.validCount > 0 ? Math.round(v.sum / v.validCount) : 0;
+                return [k, avg];
+            });
+        };
+
+        // --- PREPARAÇÃO DE DADOS ---
+
         const progs = count(data, 'program');
         const announ = count(data, 'announcer');
         const arts = count(data, 'artist');
 
-        const timeline = {};
+        // 3. Processamento da TIMELINE (Volume Total vs Média Filtrada)
+        const timelineStats = {}; 
         const sDate = document.getElementById('startDate').value;
         const eDate = document.getElementById('endDate').value;
         const groupedByHour = sDate === eDate;
@@ -488,11 +525,43 @@
             let k = groupedByHour ? 
                 m.dateObj.getHours().toString().padStart(2,'0') + 'h' : 
                 m.dateObj.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'});
-            timeline[k] = (timeline[k]||0)+1;
+            
+            if(!timelineStats[k]) timelineStats[k] = { totalVolume: 0, sumPop: 0, countPop: 0 };
+            
+            // Eixo ESQ (Volume): Conta tudo (Até vinheta de 0 pop)
+            timelineStats[k].totalVolume++;
+
+            // Eixo DIR (Qualidade): Só soma se tiver popularidade
+            if (m.popularity > 0) { // <--- FILTRO DA TIMELINE
+                timelineStats[k].sumPop += m.popularity;
+                timelineStats[k].countPop++;
+            }
         });
 
-        const tKeys = Object.keys(timeline);
+        const tKeys = Object.keys(timelineStats);
         if(groupedByHour) tKeys.sort(); else tKeys.reverse();
+
+        const tCounts = tKeys.map(k => timelineStats[k].totalVolume);
+        
+        // Cálculo da Média da Timeline
+        const tAvgs = tKeys.map(k => {
+            const s = timelineStats[k];
+            // Se countPop > 0, faz a divisão. Se não, é 0 (mas só se não teve música válida)
+            return s.countPop > 0 ? Math.round(s.sumPop / s.countPop) : 0;
+        });
+
+        // 4. Rankings de Popularidade (Usando o Helper Filtrado)
+        
+        // A. Ranking por Hora (Popularidade Média)
+        const popByHour = averagePopularity(data, m => m.dateObj.getHours().toString().padStart(2,'0') + 'h');
+        popByHour.sort((a,b) => b[1] - a[1]); 
+
+        // B. Ranking por Programa (Popularidade Média)
+        const popByProg = averagePopularity(data, m => m.program);
+        popByProg.sort((a,b) => b[1] - a[1]);
+        const topPopProg = popByProg.slice(0, 10); 
+
+        // --- RENDERIZAÇÃO ---
 
         createChart('chartPrograms', 'doughnut', {
             labels: progs.map(x=>x[0]),
@@ -509,17 +578,74 @@
             datasets: [{ label:'Plays', data: arts.map(x=>x[1]), backgroundColor: '#333', borderColor:'#555', borderWidth:1 }]
         });
 
-        createChart('chartTimeline', 'line', {
+        // Timeline Dual Axis
+        createChart('chartTimeline', 'bar', {
             labels: tKeys,
-            datasets: [{ label:'Volume', data: tKeys.map(k=>timeline[k]), borderColor:'#107c10', backgroundColor:'rgba(16,124,16,0.2)', fill:true, tension:0.3 }]
+            datasets: [
+                {
+                    type: 'line',
+                    label: 'Volume Total',
+                    data: tCounts,
+                    borderColor: '#107c10',
+                    backgroundColor: 'rgba(16,124,16,0.2)',
+                    fill: true,
+                    tension: 0.3,
+                    yAxisID: 'y'
+                },
+                {
+                    type: 'line',
+                    label: 'Pop. Média (Válida)', // Indica visualmente que é filtrado
+                    data: tAvgs,
+                    borderColor: '#ffb900',
+                    borderWidth: 2,
+                    pointBackgroundColor: '#ffb900',
+                    fill: false,
+                    tension: 0.3,
+                    yAxisID: 'y1'
+                }
+            ]
+        }, {
+            scales: {
+                y: { type: 'linear', display: true, position: 'left', title: {display:true, text:'Plays'} },
+                y1: { type: 'linear', display: true, position: 'right', min: 0, max: 100, grid: {drawOnChartArea: false}, title: {display:true, text:'Pop'} }
+            }
         });
+
+        // Chart Ranking: Pop Média por Hora (Lógica aplicada aqui também)
+        createChart('chartPopHour', 'bar', {
+            labels: popByHour.map(x=>x[0]),
+            datasets: [{
+                label: 'Popularidade Média',
+                data: popByHour.map(x=>x[1]),
+                backgroundColor: 'rgba(255, 185, 0, 0.6)',
+                borderColor: '#ffb900',
+                borderWidth: 1
+            }]
+        }, { scales: { y: { beginAtZero: true, max: 100 } } });
+
+        // Chart Ranking: Pop Média por Programa
+        createChart('chartPopProgram', 'bar', {
+            labels: topPopProg.map(x=>x[0]),
+            datasets: [{
+                label: 'Popularidade Média',
+                data: topPopProg.map(x=>x[1]),
+                backgroundColor: 'rgba(180, 0, 158, 0.6)',
+                borderColor: '#b4009e',
+                borderWidth: 1
+            }]
+        }, { indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } } });
     }
 
     function createChart(id, type, data, opts={}) {
         if(chartInstances[id]) chartInstances[id].destroy();
         chartInstances[id] = new Chart(document.getElementById(id), {
             type: type, data: data,
-            options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:type==='doughnut'}}, ...opts }
+            options: { 
+                responsive:true, 
+                maintainAspectRatio:false, 
+                plugins:{ legend:{display: type !== 'bar' || data.datasets.length > 1} }, 
+                ...opts 
+            }
         });
     }
 </script>
