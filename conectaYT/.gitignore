@@ -1,0 +1,6 @@
+.env
+browser.json
+oauth.json
+historico_atualizacoes.log
+headers_secreto.txt
+__pycache__/
