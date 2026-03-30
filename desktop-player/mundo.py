@@ -1146,6 +1146,10 @@ class RadioPlayer(QWidget):
         """Entra no modo de intervalo comercial."""
         if self._is_ad_mode:
             return
+
+        # Se o player está parado, não faz nada — só age se estiver tocando
+        if self._playback_state == PlaybackState.STOPPED:
+            return
         
         self._is_ad_mode = True
         self._ad_start_time = datetime.datetime.now()
