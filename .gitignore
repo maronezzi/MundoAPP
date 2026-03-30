@@ -1,3 +1,30 @@
-/.cache
-/.venv
-/radio_data.db
+# Banco de dados
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.cache
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Secrets
+client_secret.json
+oauth.json
+headers_secreto.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AI context files
+CLAUDE.md
+GEMINI.md
+.kilocode/

@@ -1,0 +1,4 @@
+ytmusicapi
+pandas
+requests
+python-dotenv
