@@ -7,9 +7,10 @@ from dotenv import load_dotenv
 
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QProgressBar, QFrame, QSlider, 
-                             QCheckBox, QSystemTrayIcon, QMenu, QStyle, QGraphicsDropShadowEffect)
+                             QCheckBox, QSystemTrayIcon, QMenu, QStyle, QGraphicsDropShadowEffect,
+                             QDialog, QScrollArea, QShortcut)
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QUrl, QTimer, QPoint, QByteArray
-from PyQt6.QtGui import QFont, QPixmap, QImage, QAction, QCloseEvent, QColor, QPainter, QPainterPath, QLinearGradient
+from PyQt6.QtGui import QFont, QPixmap, QImage, QAction, QCloseEvent, QColor, QPainter, QPainterPath, QLinearGradient, QKeySequence
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 load_dotenv()
@@ -283,11 +284,16 @@ class RadioApp(QWidget):
         self.ad_start_time = None
         self.estimated_ad_duration = 0
         self.image_worker = None # Variável para guardar o worker da imagem
+        
+        # Novos estados
+        self.last_volume = 0.8
+        self.is_online = False
 
         self.init_players()
         self.initUI()
         self.init_tray()
-        self.init_timers() 
+        self.init_timers()
+        self.init_shortcuts()  # Novo: atalhos de teclado 
 
     def init_players(self):
         self.player = QMediaPlayer()
@@ -315,6 +321,32 @@ class RadioApp(QWidget):
         self.fade_timer.setInterval(FADE_INTERVAL)
         self.fade_timer.timeout.connect(self.process_fade)
 
+    def init_shortcuts(self):
+        """Atalhos de teclado globais"""
+        # Espaço: Play/Pause
+        play_shortcut = QShortcut(QKeySequence("Space"), self)
+        play_shortcut.activated.connect(self.toggle_play_pause)
+        
+        # S: Stop
+        stop_shortcut = QShortcut(QKeySequence("S"), self)
+        stop_shortcut.activated.connect(self.stop_radio)
+        
+        # Ctrl+R: Refresh
+        refresh_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
+        refresh_shortcut.activated.connect(lambda: self.start_worker(False))
+        
+        # Ctrl+H: History
+        history_shortcut = QShortcut(QKeySequence("Ctrl+H"), self)
+        history_shortcut.activated.connect(self.show_history_dialog)
+        
+        # Ctrl+Q: Quit
+        quit_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
+        quit_shortcut.activated.connect(self.quit_app)
+        
+        # M: Mute
+        mute_shortcut = QShortcut(QKeySequence("M"), self)
+        mute_shortcut.activated.connect(self.toggle_mute)
+
     def initUI(self):
         self.setWindowTitle("Mundo Livre Player (Client)")
         self.setFixedSize(380, 700)
@@ -334,6 +366,18 @@ class RadioApp(QWidget):
         lbl_logo = QLabel("MUNDO LIVRE")
         lbl_logo.setStyleSheet("color: #1DB954; font-weight: 900; letter-spacing: 1px;")
         
+        # Status indicator (novo)
+        self.status_dot = QLabel()
+        self.status_dot.setFixedSize(10, 10)
+        self.status_dot.setStyleSheet("background-color: #FF5252; border-radius: 5px;")
+        self.status_indicator = QLabel("Offline")
+        self.status_indicator.setStyleSheet("color: #888; font-size: 11px;")
+        
+        status_container = QHBoxLayout()
+        status_container.addWidget(self.status_dot)
+        status_container.addWidget(self.status_indicator)
+        status_container.setSpacing(5)
+        
         self.chk_adblock = QCheckBox("Bloquear Ads")
         self.chk_adblock.setChecked(True)
         self.chk_adblock.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -344,9 +388,29 @@ class RadioApp(QWidget):
             QCheckBox::indicator:checked { background-color: #1DB954; border: 2px solid #1DB954; }
         """)
         
+        # Checkbox de notificações (novo)
+        self.chk_notifications = QCheckBox("Notificações")
+        self.chk_notifications.setChecked(True)
+        self.chk_notifications.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.chk_notifications.setStyleSheet("""
+            QCheckBox { color: #888; font-weight: 600; padding: 5px; }
+            QCheckBox::indicator { width: 36px; height: 18px; border-radius: 9px; }
+            QCheckBox::indicator:unchecked { background-color: #333; border: 2px solid #555; }
+            QCheckBox::indicator:checked { background-color: #1DB954; border: 2px solid #1DB954; }
+        """)
+        
+        # Loading indicator (novo)
+        self.loading_indicator = QLabel("⏳")
+        self.loading_indicator.setStyleSheet("color: #FFA726; font-size: 14px;")
+        self.loading_indicator.hide()
+        
         header.addWidget(lbl_logo)
+        header.addSpacing(10)
+        header.addLayout(status_container)
         header.addStretch()
+        header.addWidget(self.loading_indicator)
         header.addWidget(self.chk_adblock)
+        header.addWidget(self.chk_notifications)
         main_layout.addLayout(header)
         main_layout.addSpacing(20)
 
@@ -464,12 +528,24 @@ class RadioApp(QWidget):
         self.btn_play.setStyleSheet("QPushButton { background-color: white; color: black; border-radius: 30px; font-size: 26px; padding-left: 4px; } QPushButton:hover { background-color: #ddd; }")
         self.btn_play.clicked.connect(self.toggle_play_pause)
 
-        self.slider_vol = QSlider(Qt.Orientation.Vertical)
-        self.slider_vol.setFixedSize(20, 60)
+        self.slider_vol = QSlider(Qt.Orientation.Horizontal)
+        self.slider_vol.setFixedSize(100, 20)
         self.slider_vol.setRange(0, 100)
         self.slider_vol.setValue(80)
-        self.slider_vol.setStyleSheet("QSlider::groove:vertical { width: 4px; background: #444; border-radius: 2px; } QSlider::sub-page:vertical { background: #444; border-radius: 2px; } QSlider::add-page:vertical { background: #1DB954; border-radius: 2px; } QSlider::handle:vertical { background: #fff; height: 14px; margin: 0 -5px; border-radius: 7px; }")
+        self.slider_vol.setStyleSheet("""
+            QSlider::groove:horizontal { height: 4px; background: #444; border-radius: 2px; }
+            QSlider::sub-page:horizontal { background: #444; border-radius: 2px; }
+            QSlider::add-page:horizontal { background: #1DB954; border-radius: 2px; }
+            QSlider::handle:horizontal { background: #fff; width: 14px; height: 14px; margin: -5px 0; border-radius: 7px; }
+        """)
         self.slider_vol.valueChanged.connect(self.change_volume)
+        
+        # Botão de mute (novo)
+        self.btn_mute = QPushButton("🔊")
+        self.btn_mute.setFixedSize(24, 24)
+        self.btn_mute.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_mute.setStyleSheet("QPushButton { background: transparent; border: none; font-size: 14px; } QPushButton:hover { color: white; }")
+        self.btn_mute.clicked.connect(self.toggle_mute)
 
         dock_layout.addWidget(self.btn_refresh)
         dock_layout.addWidget(self.btn_history)
@@ -477,8 +553,14 @@ class RadioApp(QWidget):
         dock_layout.addWidget(self.btn_stop)
         dock_layout.addSpacing(15)
         dock_layout.addWidget(self.btn_play)
-        dock_layout.addStretch(1) 
-        dock_layout.addWidget(self.slider_vol)
+        dock_layout.addStretch(1)
+        
+        # Container para volume e mute
+        volume_container = QVBoxLayout()
+        volume_container.setSpacing(5)
+        volume_container.addWidget(self.btn_mute)
+        volume_container.addWidget(self.slider_vol)
+        dock_layout.addLayout(volume_container)
         
         main_layout.addWidget(dock_frame)
         self.setLayout(main_layout)
@@ -515,27 +597,122 @@ class RadioApp(QWidget):
             else: self.show_window()
 
     def show_history_menu(self):
-        songs = self.db.get_last_songs(8)
-        menu = QMenu(self)
+        """Mostra diálogo de histórico aprimorado"""
+        songs = self.db.get_last_songs(20)
         
-        title_action = QAction("🕒 Histórico (Horário Local)", self)
-        title_action.setEnabled(False)
-        menu.addAction(title_action)
-        menu.addSeparator()
-
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Histórico de Músicas")
+        dialog.setFixedSize(500, 450)
+        dialog.setStyleSheet("""
+            QDialog { background-color: #121212; color: white; }
+            QScrollArea { border: none; background: transparent; }
+            QScrollBar:vertical { background: #333; width: 8px; border-radius: 4px; }
+            QScrollBar::handle:vertical { background: #555; border-radius: 4px; min-height: 30px; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+        """)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # Header
+        header = QLabel("🕒 Últimas Tocadas")
+        header.setStyleSheet("font-size: 18px; font-weight: bold; color: #1DB954; padding: 10px;")
+        layout.addWidget(header)
+        
+        # Scrollable list
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setSpacing(8)
+        
         if not songs:
-            no_data = QAction("Nenhum dado sincronizado ainda.", self)
-            no_data.setEnabled(False)
-            menu.addAction(no_data)
+            no_data = QLabel("Nenhum dado sincronizado ainda.")
+            no_data.setStyleSheet("color: #888; font-style: italic; padding: 20px;")
+            no_data.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            container_layout.addWidget(no_data)
         else:
             for title, artist, time_played in songs:
-                text = f"{time_played} | {title} - {artist}"
-                if len(text) > 40: text = text[:37] + "..."
-                action = QAction(text, self)
-                menu.addAction(action)
-
-        pos = self.btn_history.mapToGlobal(QPoint(0, -100))
-        menu.exec(pos)
+                song_widget = self.create_song_item(title, artist, time_played)
+                container_layout.addWidget(song_widget)
+        
+        container_layout.addStretch()
+        scroll.setWidget(container)
+        layout.addWidget(scroll)
+        
+        # Close button
+        btn_close = QPushButton("Fechar")
+        btn_close.clicked.connect(dialog.close)
+        btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_close.setStyleSheet("""
+            QPushButton { 
+                background-color: #1DB954; 
+                color: white; 
+                padding: 12px; 
+                border-radius: 8px; 
+                font-weight: bold;
+                font-size: 14px;
+            }
+            QPushButton:hover { background-color: #1ed760; }
+        """)
+        layout.addWidget(btn_close)
+        
+        dialog.exec()
+    
+    def create_song_item(self, title, artist, time_played):
+        """Cria um widget para exibir uma música no histórico"""
+        widget = QFrame()
+        widget.setStyleSheet("""
+            QFrame { 
+                background-color: #252525; 
+                border-radius: 10px; 
+                border: 1px solid #333;
+            }
+            QFrame:hover {
+                background-color: #2a2a2a;
+                border: 1px solid #444;
+            }
+        """)
+        widget.setFixedHeight(65)
+        
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(15, 8, 15, 8)
+        
+        # Time badge
+        time_lbl = QLabel(time_played)
+        time_lbl.setStyleSheet("""
+            color: #1DB954; 
+            font-weight: bold; 
+            font-size: 13px;
+            background-color: rgba(29, 185, 84, 0.1);
+            padding: 5px 10px;
+            border-radius: 5px;
+        """)
+        time_lbl.setFixedWidth(65)
+        
+        # Song info
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(2)
+        
+        title_lbl = QLabel(title[:35] + "..." if len(title) > 35 else title)
+        title_lbl.setStyleSheet("color: white; font-weight: bold; font-size: 14px;")
+        
+        artist_lbl = QLabel(artist[:40] + "..." if len(artist) > 40 else artist)
+        artist_lbl.setStyleSheet("color: #B3B3B3; font-size: 12px;")
+        
+        info_layout.addWidget(title_lbl)
+        info_layout.addWidget(artist_lbl)
+        
+        layout.addWidget(time_lbl)
+        layout.addSpacing(10)
+        layout.addLayout(info_layout)
+        
+        return widget
+    
+    def show_history_dialog(self):
+        """Alias para show_history_menu (usado nos atalhos)"""
+        self.show_history_menu()
 
     def toggle_play_pause(self):
         state = self.player.playbackState()
@@ -573,6 +750,25 @@ class RadioApp(QWidget):
 
     def change_volume(self, val):
         self.user_volume = val / 100
+        if self.user_volume > 0:
+            self.btn_mute.setText("🔊")
+        else:
+            self.btn_mute.setText("🔇")
+        if not self.is_ad_mode:
+            self.audio_output.setVolume(self.user_volume)
+
+    def toggle_mute(self):
+        """Alterna entre mute/unmute"""
+        if self.user_volume > 0:
+            self.last_volume = self.user_volume
+            self.user_volume = 0
+            self.slider_vol.setValue(0)
+            self.btn_mute.setText("🔇")
+        else:
+            self.user_volume = self.last_volume if hasattr(self, 'last_volume') else 0.8
+            self.slider_vol.setValue(int(self.user_volume * 100))
+            self.btn_mute.setText("🔊")
+        
         if not self.is_ad_mode:
             self.audio_output.setVolume(self.user_volume)
 
@@ -649,17 +845,29 @@ class RadioApp(QWidget):
         self.lbl_ad_timer.setText(f"Retorno estimado: {mins:02d}:{secs:02d}")
         if remaining <= 0: self.lbl_ad_timer.setText("Retornando...")
 
-    def auto_fetch_data(self): self.start_worker(True)
+    def auto_fetch_data(self): 
+        self.start_worker(True)
 
     def start_worker(self, is_auto):
+        self.loading_indicator.show()
         self.worker = ApiWorker(self.current_song_name)
         self.worker.data_updated.connect(self.on_data)
+        self.worker.error.connect(self.on_api_error)
         self.worker.start()
+
+    def on_api_error(self, error_msg):
+        """Callback para erros da API"""
+        self.loading_indicator.hide()
+        self.is_online = False
+        self.status_dot.setStyleSheet("background-color: #FF5252; border-radius: 5px;")
+        self.status_indicator.setText("Offline")
+        print(f"API Error: {error_msg}")
 
     def update_cover_image(self, pixmap):
         self.lbl_image.set_image(pixmap)
 
     def on_data(self, data):
+        self.loading_indicator.hide()
         status = data.get("status")
 
         if status == "ad_break":
@@ -685,6 +893,12 @@ class RadioApp(QWidget):
         if data.get("obj"):
             self.db.sync_song(data["obj"])
 
+        # Update status indicator
+        if not self.is_online:
+            self.is_online = True
+            self.status_dot.setStyleSheet("background-color: #1DB954; border-radius: 5px;")
+            self.status_indicator.setText("Online")
+
         # Se a música mudou, busca a capa nova
         if musica != self.current_song_name:
             self.lbl_image.set_image(None) # Limpa a anterior enquanto busca
@@ -707,8 +921,11 @@ class RadioApp(QWidget):
         self.bar_pop.setValue(pop)
         self.lbl_pop_val.setText(f"{pop}%")
 
-        if musica != self.last_notified_song:
-            self.tray_icon.showMessage("Nova Música", f"{musica} - {artista}", QSystemTrayIcon.MessageIcon.NoIcon, 3000)
+        # Notificações inteligentes - só notifica se estiver minimizado
+        if musica != self.last_notified_song and self.chk_notifications.isChecked():
+            if not self.isVisible():
+                self.tray_icon.showMessage("Nova Música", f"{musica} - {artista}", 
+                                           QSystemTrayIcon.MessageIcon.NoIcon, 3000)
             self.last_notified_song = musica
 
 if __name__ == "__main__":
