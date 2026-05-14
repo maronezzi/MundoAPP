@@ -52,7 +52,9 @@ def ler_headers_externos():
             with open(ARQUIVO_HEADERS_TXT, "r", encoding="utf-8") as f:
                 return f.read().strip()
         except Exception as e:
-            print(f"⚠️ Erro ao ler '{ARQUIVO_HEADERS_TXT}': {e}")
+            msg = f"Erro ao ler '{ARQUIVO_HEADERS_TXT}': {e}"
+            print(f"⚠️ {msg}")
+            registrar_log(msg, "ERROR")
             return None
     return None
 
@@ -229,7 +231,9 @@ def buscar_video_ids(ytmusic, lista_musicas):
                     print(f"   [{i+1}/{total}] ❌ Não encontrado: {query}")
             time.sleep(0.3) # Rate limit leve
         except Exception as e:
-            print(f"   Erro ao buscar {query}: {e}")
+            msg_erro = f"Erro ao buscar {query}: {e}"
+            print(f"   {msg_erro}")
+            registrar_log(msg_erro, "ERROR")
             
     return video_ids
 
@@ -257,7 +261,9 @@ def limpar_e_adicionar(ytmusic, playlist_id, track_ids, titulo):
             ytmusic.remove_playlist_items(playlist_id, tracks_atuais)
             time.sleep(2)
     except Exception as e:
-        print(f"   Erro ao limpar playlist: {e}")
+        msg_erro = f"Erro ao limpar playlist '{titulo}': {e}"
+        print(f"   {msg_erro}")
+        registrar_log(msg_erro, "ERROR")
         sucesso = False
 
     if track_ids:
@@ -269,7 +275,9 @@ def limpar_e_adicionar(ytmusic, playlist_id, track_ids, titulo):
             print(f"   ✨ Adicionadas {len(track_ids)} novas faixas em '{titulo}'.")
             registrar_log(f"Playlist '{titulo}' atualizada ({len(track_ids)} faixas).", "SUCCESS")
         except Exception as e:
-            print(f"   Erro ao adicionar faixas: {e}")
+            msg_erro = f"Erro ao adicionar faixas na playlist '{titulo}': {e}"
+            print(f"   {msg_erro}")
+            registrar_log(msg_erro, "ERROR")
             sucesso = False
     else:
         print("   Nenhuma faixa nova encontrada.")
@@ -287,42 +295,67 @@ def gerenciar_playlist(ytmusic, chave_playlist, track_ids):
         try:
             playlist_id = ytmusic.create_playlist(title=titulo, description=descricao)
         except Exception as e:
-            print(f"❌ Erro fatal ao criar playlist: {e}")
+            msg_erro = f"Erro fatal ao criar playlist '{titulo}': {e}"
+            print(f"❌ {msg_erro}")
+            
+            if "401" in str(e) or "Unauthorized" in str(e):
+                registrar_log(msg_erro, "CRITICAL")
+                exit(1)
+            
+            registrar_log(msg_erro, "ERROR")
             return
     else:
         print(f"♻️ Playlist encontrada (ID: {playlist_id}). Atualizando...")
         try:
             ytmusic.edit_playlist(playlist_id, title=titulo, description=descricao)
-        except:
-            pass
+        except Exception as e:
+            msg_erro = f"Erro ao editar playlist '{titulo}': {e}"
+            print(f"⚠️ {msg_erro}")
+            
+            if "401" in str(e) or "Unauthorized" in str(e):
+                registrar_log(msg_erro, "CRITICAL")
+                exit(1)
+                
+            registrar_log(msg_erro, "ERROR")
 
     limpar_e_adicionar(ytmusic, playlist_id, track_ids, titulo)
 
 # --- MAIN ---
 def main():
-    registrar_log("--- Iniciando execução (Modo Otimizado Busca) ---", "START")
-    
-    if not os.path.exists(".env") and not os.environ.get("RADIO_API_URL"):
-        print("⚠️ AVISO: .env não encontrado.")
+    try:
+        registrar_log("--- Iniciando execução (Modo Otimizado Busca) ---", "START")
+        
+        if not os.path.exists(".env") and not os.environ.get("RADIO_API_URL"):
+            print("⚠️ AVISO: .env não encontrado.")
 
-    yt = autenticar_ytm()
-    
-    raw_data = get_radio_data(limit=600)
-    if not raw_data: return
+        yt = autenticar_ytm()
+        
+        raw_data = get_radio_data(limit=600)
+        if not raw_data:
+            registrar_log("Nenhum dado recebido da API da rádio.", "WARNING")
+            return
 
-    df = process_data(raw_data)
-    print(f"📊 Processado e Sanitizado: {len(df)} linhas.")
+        df = process_data(raw_data)
+        print(f"📊 Processado e Sanitizado: {len(df)} linhas.")
 
-    conteudo_playlists = gerar_listas_musicas(df)
+        conteudo_playlists = gerar_listas_musicas(df)
 
-    for chave, lista_musicas in conteudo_playlists.items():
-        if not lista_musicas: continue
-        print(f"\n🎧 --- {TITULOS_PLAYLISTS.get(chave, chave)} ---")
-        track_ids = buscar_video_ids(yt, lista_musicas)
-        gerenciar_playlist(yt, chave, track_ids)
+        for chave, lista_musicas in conteudo_playlists.items():
+            if not lista_musicas: continue
+            print(f"\n🎧 --- {TITULOS_PLAYLISTS.get(chave, chave)} ---")
+            track_ids = buscar_video_ids(yt, lista_musicas)
+            gerenciar_playlist(yt, chave, track_ids)
 
-    print("\n✅ Processo finalizado com sucesso!")
-    registrar_log("Processo finalizado.", "END")
+        print("\n✅ Processo finalizado com sucesso!")
+        registrar_log("Processo finalizado.", "END")
+    except SystemExit:
+        # Já logado dentro da função que chamou exit()
+        pass
+    except Exception as e:
+        msg_erro = f"Ocorreu um erro inesperado: {e}"
+        print(f"\n💥 {msg_erro}")
+        registrar_log(msg_erro, "CRITICAL")
+        exit(1)
 
 if __name__ == "__main__":
     main()

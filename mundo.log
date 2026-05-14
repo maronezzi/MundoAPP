@@ -1,0 +1,18 @@
+qt.multimedia.ffmpeg: Using Qt multimedia with FFmpeg version 7.1.3 LGPL version 2.1 or later
+qt.core.qobject.connect: QObject::connect: No such signal QPlatformNativeInterface::systemTrayWindowChanged(QScreen*)
+Input #0, mp3, from 'http://stream.zeno.fm/0r0xa792kwzuv':
+  Metadata:
+    icy-name        : Lofi Hip Hop Radio
+    StreamTitle     : Taiko Ky - The Train Ride Home
+    StreamUrl       : &artist=Taiko Ky&album=
+  Duration: N/A, start: 0.000000, bitrate: 128 kb/s
+  Stream #0:0: Audio: mp3 (mp3float), 44100 Hz, stereo, fltp, 128 kb/s
+Input #0, aac, from 'https://playerservices.streamtheworld.com/api/livestream-redirect/MUNDOLIVRE_CWBAAC_64.aac':
+  Metadata:
+    icy-name        : MUNDOLIVRE_CWB
+    icy-description : 
+    icy-url         : https://mundolivrefm.com.br/
+    icy-genre       : Adult Contemporary
+    icy-br          : 96
+  Duration: N/A, bitrate: 97 kb/s
+  Stream #0:0: Audio: aac (LC), 44100 Hz, stereo, fltp, 97 kb/s

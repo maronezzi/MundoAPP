@@ -1,0 +1,19 @@
+# Caddyfile - Radio Monitor API com HTTPS automático
+# Substitua radio.mundolivrefm.com.br pelo seu domínio (ou use um subdomínio gratuito)
+
+# OPÇÃO 1: Com domínio próprio (recomendado - HTTPS automático via Let's Encrypt)
+# radio.seudominio.com {
+#     reverse_proxy localhost:8000
+# }
+
+# OPÇÃO 2: Com IP direto (HTTP - sem HTTPS, mas com Caddy como proxy)
+:80 {
+    reverse_proxy localhost:8000
+}
+
+# OPÇÃO 3: HTTPS com IP (certificado auto-assinado - Android não confia por padrão)
+# Precisa adicionar o certificado no dispositivo. Não recomendado.
+# :443 {
+#     tls internal
+#     reverse_proxy localhost:8000
+# }

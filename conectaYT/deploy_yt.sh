@@ -153,14 +153,17 @@ ssh "$REMOTE_USER@$REMOTE_HOST" "bash -s" <<EOF
     
     # Remove browser.json antigo se existir para forçar regeneração limpa com os novos headers
     # (Opcional: descomente a linha abaixo se quiser forçar re-login sempre que fizer deploy)
-    # rm -f browser.json
+    rm -f browser.json
 
-    CRON_CMD="cd $REMOTE_DIR && $REMOTE_DIR/venv/bin/python $REMOTE_DIR/$LOCAL_SCRIPT >> $REMOTE_DIR/execution.log 2>&1"
+    # Monta a linha do Cron diretamente (expansão local das variáveis)
+    NEW_CRON_LINE="20 15 * * * cd $REMOTE_DIR && $REMOTE_DIR/venv/bin/python $REMOTE_DIR/$LOCAL_SCRIPT >> $REMOTE_DIR/execution.log 2>&1"
     
-    # Atualiza o cron
-    (crontab -l 2>/dev/null | grep -v "$LOCAL_SCRIPT"; echo "0 6 * * * \$CRON_CMD") | crontab -
+    # Atualiza o cron de forma segura (|| true evita erro se grep não achar nada)
+    (crontab -l 2>/dev/null | grep -v "$LOCAL_SCRIPT" || true; echo "\$NEW_CRON_LINE") | crontab -
     
-    echo "[VPS] ✅ Agendado para todo dia às 06:00 AM."
+    echo "[VPS] ✅ Agendado para todo dia às 14:35."
+    echo "[VPS] 📋 Lista atual do Crontab:"
+    crontab -l
 
     # --- F. TESTE FINAL ---
     echo "---------------------------------------------------"
