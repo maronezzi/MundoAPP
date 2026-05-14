@@ -8,9 +8,9 @@ from dotenv import load_dotenv
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QProgressBar, QFrame, QSlider, 
                              QCheckBox, QSystemTrayIcon, QMenu, QStyle, QGraphicsDropShadowEffect,
-                             QDialog, QScrollArea, QShortcut)
+                             QDialog, QScrollArea)
 from PyQt6.QtCore import QThread, pyqtSignal, Qt, QUrl, QTimer, QPoint, QByteArray
-from PyQt6.QtGui import QFont, QPixmap, QImage, QAction, QCloseEvent, QColor, QPainter, QPainterPath, QLinearGradient, QKeySequence
+from PyQt6.QtGui import QFont, QPixmap, QImage, QAction, QCloseEvent, QColor, QPainter, QPainterPath, QLinearGradient, QKeySequence, QShortcut
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 load_dotenv()
