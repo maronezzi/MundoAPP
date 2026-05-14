@@ -327,9 +327,9 @@ class RadioApp(QWidget):
         play_shortcut = QShortcut(QKeySequence("Space"), self)
         play_shortcut.activated.connect(self.toggle_play_pause)
         
-        # S: Stop
+        # S: Stop/Play toggle
         stop_shortcut = QShortcut(QKeySequence("S"), self)
-        stop_shortcut.activated.connect(self.stop_radio)
+        stop_shortcut.activated.connect(self.toggle_play_pause)
         
         # Ctrl+R: Refresh
         refresh_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
@@ -495,7 +495,7 @@ class RadioApp(QWidget):
         
         main_layout.addStretch() 
 
-        # Dock principal (controles de playback)
+        # Dock principal (controles)
         dock_frame = QFrame()
         dock_frame.setFixedHeight(90)
         dock_frame.setStyleSheet("background-color: #252525; border-radius: 20px;")
@@ -517,67 +517,42 @@ class RadioApp(QWidget):
         self.btn_history.setStyleSheet("QPushButton { color: #777; background: transparent; font-size: 16px; border:none; } QPushButton:hover { color: white; }")
         self.btn_history.clicked.connect(self.show_history_menu)
 
-        self.btn_stop = QPushButton("⏹")
-        self.btn_stop.setFixedSize(45, 45)
-        self.btn_stop.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_stop.setStyleSheet("QPushButton { color: #E91E63; background: transparent; font-size: 20px; border: 1px solid #444; border-radius: 22px; }")
-        self.btn_stop.clicked.connect(self.stop_radio)
-
+        # Botão único Play/Stop
         self.btn_play = QPushButton("▶")
         self.btn_play.setFixedSize(60, 60)
         self.btn_play.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_play.setStyleSheet("QPushButton { background-color: white; color: black; border-radius: 30px; font-size: 26px; padding-left: 4px; } QPushButton:hover { background-color: #ddd; }")
         self.btn_play.clicked.connect(self.toggle_play_pause)
 
-        dock_layout.addWidget(self.btn_refresh)
-        dock_layout.addWidget(self.btn_history)
-        dock_layout.addStretch(1) 
-        dock_layout.addWidget(self.btn_stop)
-        dock_layout.addSpacing(15)
-        dock_layout.addWidget(self.btn_play)
-        dock_layout.addStretch(1) 
-        
-        # Placeholder para alinhar com a barra de volume abaixo
-        spacer_right = QWidget()
-        spacer_right.setFixedSize(55, 10)
-        spacer_right.setStyleSheet("background: transparent;")
-        dock_layout.addWidget(spacer_right)
-        
-        main_layout.addWidget(dock_frame)
-        main_layout.addSpacing(8)
-        
-        # Barra de volume (layout próprio, fora do dock)
-        vol_frame = QFrame()
-        vol_frame.setFixedHeight(40)
-        vol_frame.setStyleSheet("background-color: #252525; border-radius: 20px;")
-        
-        vol_layout = QHBoxLayout(vol_frame)
-        vol_layout.setContentsMargins(15, 8, 15, 8)
-        vol_layout.setSpacing(8)
-        
-        # Botão de mute
-        self.btn_mute = QPushButton("🔊")
-        self.btn_mute.setFixedSize(24, 24)
-        self.btn_mute.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_mute.setStyleSheet("QPushButton { background: transparent; border: none; font-size: 14px; } QPushButton:hover { color: white; }")
-        self.btn_mute.clicked.connect(self.toggle_mute)
-        
-        # Slider horizontal
-        self.slider_vol = QSlider(Qt.Orientation.Horizontal)
+        # Volume vertical (direita, dentro do dock)
+        self.slider_vol = QSlider(Qt.Orientation.Vertical)
+        self.slider_vol.setFixedSize(20, 60)
         self.slider_vol.setRange(0, 100)
         self.slider_vol.setValue(80)
         self.slider_vol.setStyleSheet("""
-            QSlider::groove:horizontal { height: 4px; background: #444; border-radius: 2px; }
-            QSlider::sub-page:horizontal { background: #444; border-radius: 2px; }
-            QSlider::add-page:horizontal { background: #1DB954; border-radius: 2px; }
-            QSlider::handle:horizontal { background: #fff; width: 14px; height: 14px; margin: -5px 0; border-radius: 7px; }
+            QSlider::groove:vertical { width: 4px; background: #444; border-radius: 2px; }
+            QSlider::sub-page:vertical { background: #1DB954; border-radius: 2px; }
+            QSlider::add-page:vertical { background: #444; border-radius: 2px; }
+            QSlider::handle:vertical { background: #fff; width: 14px; height: 14px; margin: -5px 0; border-radius: 7px; }
         """)
         self.slider_vol.valueChanged.connect(self.change_volume)
         
-        vol_layout.addWidget(self.btn_mute)
-        vol_layout.addWidget(self.slider_vol)
+        # Botão de mute
+        self.btn_mute = QPushButton("🔊")
+        self.btn_mute.setFixedSize(20, 20)
+        self.btn_mute.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_mute.setStyleSheet("QPushButton { background: transparent; border: none; font-size: 12px; } QPushButton:hover { color: white; }")
+        self.btn_mute.clicked.connect(self.toggle_mute)
+
+        dock_layout.addWidget(self.btn_refresh)
+        dock_layout.addWidget(self.btn_history)
+        dock_layout.addStretch(1)
+        dock_layout.addWidget(self.btn_play)
+        dock_layout.addStretch(1)
+        dock_layout.addWidget(self.slider_vol)
+        dock_layout.addWidget(self.btn_mute)
         
-        main_layout.addWidget(vol_frame)
+        main_layout.addWidget(dock_frame)
         self.setLayout(main_layout)
         
         QTimer.singleShot(500, lambda: self.start_worker(False))
@@ -750,9 +725,10 @@ class RadioApp(QWidget):
         state = self.player.playbackState()
         if state == QMediaPlayer.PlaybackState.PlayingState:
             self.user_stopped = True
-            self.player.pause()
-            self.overlay_player.pause()
-            self.update_play_button_style("pause")
+            self.player.stop()
+            self.overlay_player.stop()
+            self.btn_play.setText("▶")
+            self.btn_play.setStyleSheet("QPushButton { background-color: white; color: black; border-radius: 30px; font-size: 26px; padding-left: 4px; } QPushButton:hover { background-color: #ddd; }")
         else:
             self.user_stopped = False
             if self.is_ad_mode:
@@ -764,21 +740,8 @@ class RadioApp(QWidget):
             else:
                 self.audio_output.setVolume(self.user_volume)
                 self.player.play()
-            self.update_play_button_style("play")
-
-    def stop_radio(self):
-        self.user_stopped = True
-        self.player.stop()
-        self.overlay_player.stop()
-        self.update_play_button_style("stop")
-
-    def update_play_button_style(self, status):
-        if status == "play":
             self.btn_play.setText("II")
-            self.btn_play.setStyleSheet("background-color: #1DB954; color: white; border-radius: 30px; font-size: 16px; font-weight: bold;")
-        else:
-            self.btn_play.setText("▶")
-            self.btn_play.setStyleSheet("background-color: white; color: black; border-radius: 30px; font-size: 26px; padding-left: 4px;")
+            self.btn_play.setStyleSheet("QPushButton { background-color: #1DB954; color: white; border-radius: 30px; font-size: 16px; font-weight: bold; } QPushButton:hover { background-color: #1ed760; }")
 
     def change_volume(self, val):
         self.user_volume = val / 100
