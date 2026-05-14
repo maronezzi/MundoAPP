@@ -109,7 +109,7 @@ class DatabaseHandler:
             with sqlite3.connect(self.db_name) as conn:
                 c = conn.cursor()
                 c.execute("""
-                    SELECT title, artist, strftime('%H:%M', datetime(played_at, 'localtime'))
+                    SELECT title, artist, strftime('%H:%M', datetime(played_at, 'localtime')), popularity
                     FROM songs 
                     ORDER BY id DESC LIMIT ?
                 """, (limit,))
@@ -496,11 +496,11 @@ class RadioApp(QWidget):
         main_layout.addStretch() 
 
         dock_frame = QFrame()
-        dock_frame.setFixedHeight(90)
+        dock_frame.setFixedHeight(110)  # Aumentado de 90 para 110
         dock_frame.setStyleSheet("background-color: #252525; border-radius: 20px;")
         
         dock_layout = QHBoxLayout(dock_frame)
-        dock_layout.setContentsMargins(15, 10, 15, 10)
+        dock_layout.setContentsMargins(15, 12, 15, 12)  # Aumentado margins
         dock_layout.setSpacing(10) 
 
         self.btn_refresh = QPushButton("↻")
@@ -557,7 +557,8 @@ class RadioApp(QWidget):
         
         # Container para volume e mute
         volume_container = QVBoxLayout()
-        volume_container.setSpacing(5)
+        volume_container.setSpacing(3)  # Reduzido de 5 para 3
+        volume_container.setContentsMargins(0, 2, 0, 2)  # Adicionado margins
         volume_container.addWidget(self.btn_mute)
         volume_container.addWidget(self.slider_vol)
         dock_layout.addLayout(volume_container)
@@ -633,8 +634,8 @@ class RadioApp(QWidget):
             no_data.setAlignment(Qt.AlignmentFlag.AlignCenter)
             container_layout.addWidget(no_data)
         else:
-            for title, artist, time_played in songs:
-                song_widget = self.create_song_item(title, artist, time_played)
+            for title, artist, time_played, popularity in songs:
+                song_widget = self.create_song_item(title, artist, time_played, popularity)
                 container_layout.addWidget(song_widget)
         
         container_layout.addStretch()
@@ -660,7 +661,7 @@ class RadioApp(QWidget):
         
         dialog.exec()
     
-    def create_song_item(self, title, artist, time_played):
+    def create_song_item(self, title, artist, time_played, popularity=0):
         """Cria um widget para exibir uma música no histórico"""
         widget = QFrame()
         widget.setStyleSheet("""
@@ -674,10 +675,10 @@ class RadioApp(QWidget):
                 border: 1px solid #444;
             }
         """)
-        widget.setFixedHeight(65)
+        widget.setFixedHeight(75)  # Aumentado de 65 para 75 para acomodar popularidade
         
         layout = QHBoxLayout(widget)
-        layout.setContentsMargins(15, 8, 15, 8)
+        layout.setContentsMargins(15, 10, 15, 10)
         
         # Time badge
         time_lbl = QLabel(time_played)
@@ -693,15 +694,32 @@ class RadioApp(QWidget):
         
         # Song info
         info_layout = QVBoxLayout()
-        info_layout.setSpacing(2)
+        info_layout.setSpacing(3)
         
-        title_lbl = QLabel(title[:35] + "..." if len(title) > 35 else title)
+        # Title row
+        title_row = QHBoxLayout()
+        title_lbl = QLabel(title[:30] + "..." if len(title) > 30 else title)
         title_lbl.setStyleSheet("color: white; font-weight: bold; font-size: 14px;")
+        title_row.addWidget(title_lbl)
+        title_row.addStretch()
         
-        artist_lbl = QLabel(artist[:40] + "..." if len(artist) > 40 else artist)
+        # Popularity badge
+        pop_color = "#FFB74D" if popularity >= 70 else "#FFA726" if popularity >= 40 else "#B0BEC5"
+        pop_lbl = QLabel(f"🔥 {popularity}%")
+        pop_lbl.setStyleSheet(f"""
+            color: {pop_color};
+            font-weight: bold;
+            font-size: 11px;
+            background-color: rgba(255, 183, 77, 0.1);
+            padding: 3px 8px;
+            border-radius: 4px;
+        """)
+        title_row.addWidget(pop_lbl)
+        
+        artist_lbl = QLabel(artist[:38] + "..." if len(artist) > 38 else artist)
         artist_lbl.setStyleSheet("color: #B3B3B3; font-size: 12px;")
         
-        info_layout.addWidget(title_lbl)
+        info_layout.addLayout(title_row)
         info_layout.addWidget(artist_lbl)
         
         layout.addWidget(time_lbl)
