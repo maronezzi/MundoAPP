@@ -495,12 +495,13 @@ class RadioApp(QWidget):
         
         main_layout.addStretch() 
 
+        # Dock principal (controles de playback)
         dock_frame = QFrame()
-        dock_frame.setFixedHeight(110)  # Aumentado de 90 para 110
+        dock_frame.setFixedHeight(90)
         dock_frame.setStyleSheet("background-color: #252525; border-radius: 20px;")
         
         dock_layout = QHBoxLayout(dock_frame)
-        dock_layout.setContentsMargins(15, 12, 15, 12)  # Aumentado margins
+        dock_layout.setContentsMargins(15, 10, 15, 10)
         dock_layout.setSpacing(10) 
 
         self.btn_refresh = QPushButton("↻")
@@ -528,8 +529,41 @@ class RadioApp(QWidget):
         self.btn_play.setStyleSheet("QPushButton { background-color: white; color: black; border-radius: 30px; font-size: 26px; padding-left: 4px; } QPushButton:hover { background-color: #ddd; }")
         self.btn_play.clicked.connect(self.toggle_play_pause)
 
+        dock_layout.addWidget(self.btn_refresh)
+        dock_layout.addWidget(self.btn_history)
+        dock_layout.addStretch(1) 
+        dock_layout.addWidget(self.btn_stop)
+        dock_layout.addSpacing(15)
+        dock_layout.addWidget(self.btn_play)
+        dock_layout.addStretch(1) 
+        
+        # Placeholder para alinhar com a barra de volume abaixo
+        spacer_right = QWidget()
+        spacer_right.setFixedSize(55, 10)
+        spacer_right.setStyleSheet("background: transparent;")
+        dock_layout.addWidget(spacer_right)
+        
+        main_layout.addWidget(dock_frame)
+        main_layout.addSpacing(8)
+        
+        # Barra de volume (layout próprio, fora do dock)
+        vol_frame = QFrame()
+        vol_frame.setFixedHeight(40)
+        vol_frame.setStyleSheet("background-color: #252525; border-radius: 20px;")
+        
+        vol_layout = QHBoxLayout(vol_frame)
+        vol_layout.setContentsMargins(15, 8, 15, 8)
+        vol_layout.setSpacing(8)
+        
+        # Botão de mute
+        self.btn_mute = QPushButton("🔊")
+        self.btn_mute.setFixedSize(24, 24)
+        self.btn_mute.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_mute.setStyleSheet("QPushButton { background: transparent; border: none; font-size: 14px; } QPushButton:hover { color: white; }")
+        self.btn_mute.clicked.connect(self.toggle_mute)
+        
+        # Slider horizontal
         self.slider_vol = QSlider(Qt.Orientation.Horizontal)
-        self.slider_vol.setFixedSize(100, 20)
         self.slider_vol.setRange(0, 100)
         self.slider_vol.setValue(80)
         self.slider_vol.setStyleSheet("""
@@ -540,30 +574,10 @@ class RadioApp(QWidget):
         """)
         self.slider_vol.valueChanged.connect(self.change_volume)
         
-        # Botão de mute (novo)
-        self.btn_mute = QPushButton("🔊")
-        self.btn_mute.setFixedSize(24, 24)
-        self.btn_mute.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_mute.setStyleSheet("QPushButton { background: transparent; border: none; font-size: 14px; } QPushButton:hover { color: white; }")
-        self.btn_mute.clicked.connect(self.toggle_mute)
-
-        dock_layout.addWidget(self.btn_refresh)
-        dock_layout.addWidget(self.btn_history)
-        dock_layout.addStretch(1) 
-        dock_layout.addWidget(self.btn_stop)
-        dock_layout.addSpacing(15)
-        dock_layout.addWidget(self.btn_play)
-        dock_layout.addStretch(1)
+        vol_layout.addWidget(self.btn_mute)
+        vol_layout.addWidget(self.slider_vol)
         
-        # Container para volume e mute
-        volume_container = QVBoxLayout()
-        volume_container.setSpacing(3)  # Reduzido de 5 para 3
-        volume_container.setContentsMargins(0, 2, 0, 2)  # Adicionado margins
-        volume_container.addWidget(self.btn_mute)
-        volume_container.addWidget(self.slider_vol)
-        dock_layout.addLayout(volume_container)
-        
-        main_layout.addWidget(dock_frame)
+        main_layout.addWidget(vol_frame)
         self.setLayout(main_layout)
         
         QTimer.singleShot(500, lambda: self.start_worker(False))
